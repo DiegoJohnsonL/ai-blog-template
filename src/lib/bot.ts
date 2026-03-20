@@ -1,8 +1,7 @@
 import { Chat } from "chat";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { createPostgresState } from "@chat-adapter/state-pg";
-import { streamText, stepCountIs, gateway } from "ai";
-import { toAiMessages } from "chat";
+import { streamText, stepCountIs, gateway, type ModelMessage } from "ai";
 import { agentTools, setCurrentChatId } from "./agent/tools";
 import { pool } from "@/db";
 
@@ -28,6 +27,12 @@ IMAGES:
 TRANSLATIONS:
 - Update keys directly. Preserve ICU placeholders like {date} or {count}.`;
 
+const MAX_HISTORY_MESSAGES = 40;
+
+interface ThreadState {
+  aiMessages?: ModelMessage[];
+}
+
 let _bot: Chat | null = null;
 
 export function getBot() {
@@ -43,13 +48,18 @@ export function getBot() {
 
     _bot.onNewMention(async (thread, message) => {
       await thread.subscribe();
+      // Clear any stale history on first mention
+      await thread.setState({ aiMessages: [] }, { replace: true });
       await handleMessage(thread, message);
     });
 
     _bot.onSubscribedMessage(async (thread, message) => {
       if (message.text.trim().toLowerCase() === "/new") {
         await thread.unsubscribe();
-        await thread.post("Conversation cleared. Send a new message to start fresh.");
+        await thread.setState({ aiMessages: [] }, { replace: true });
+        await thread.post(
+          "Conversation cleared. Send a new message to start fresh.",
+        );
         return;
       }
       await handleMessage(thread, message);
@@ -68,19 +78,33 @@ async function handleMessage(
   const chatId = thread.channelId;
   setCurrentChatId(chatId);
 
-  const messages = [];
-  for await (const msg of thread.allMessages) {
-    messages.push(msg);
-  }
-  const history = await toAiMessages(messages);
+  // Load full AI message history (includes tool calls/results)
+  const state = (await thread.state) as ThreadState | null;
+  const previousMessages: ModelMessage[] = state?.aiMessages ?? [];
+
+  // Add the new user message
+  const userMessage: ModelMessage = {
+    role: "user",
+    content: _message.text,
+  };
+
+  const allMessages = [...previousMessages, userMessage];
 
   const result = streamText({
     model: gateway("anthropic/claude-sonnet-4.5"),
     system: SYSTEM_PROMPT,
-    messages: history,
+    messages: allMessages,
     tools: agentTools,
     stopWhen: stepCountIs(10),
   });
 
   await thread.post(result.fullStream);
+
+  // Persist the full conversation including tool calls for next turn
+  const response = await result.response;
+  const updatedMessages = [...allMessages, ...response.messages].slice(
+    -MAX_HISTORY_MESSAGES,
+  );
+
+  await thread.setState({ aiMessages: updatedMessages });
 }
