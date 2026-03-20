@@ -98,11 +98,15 @@ async function handleMessage(
     stopWhen: stepCountIs(10),
   });
 
+  // Ensure the stream runs to completion even if the chat post returns early
+  result.consumeStream();
+
   await thread.post(result.fullStream);
 
-  // Persist the full conversation including tool calls for next turn
-  const response = await result.response;
-  const updatedMessages = [...allMessages, ...response.messages].slice(
+  // Persist the full conversation including tool calls for next turn.
+  // response.messages contains ALL steps (tool calls + results + final text).
+  const { messages: responseMessages } = await result.response;
+  const updatedMessages = [...allMessages, ...responseMessages].slice(
     -MAX_HISTORY_MESSAGES,
   );
 
