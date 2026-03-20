@@ -8,6 +8,7 @@ import {
   listFiles,
 } from "@/lib/github";
 import { notifyDeployment } from "@/workflows/notify-deployment";
+import { sendTelegramPhoto } from "@/lib/telegram";
 
 // Set by the bot before invoking the agent, so the workflow
 // can send deployment notifications back to the right chat.
@@ -130,6 +131,15 @@ export const agentTools = {
         size,
       });
 
+      // Send photo preview to Telegram so the user can see it
+      if (_currentChatId) {
+        await sendTelegramPhoto(
+          _currentChatId,
+          image.base64,
+          `Generated: ${filename}.png`,
+        );
+      }
+
       await createOrUpdateFile(
         filePath,
         image.base64,
@@ -141,7 +151,7 @@ export const agentTools = {
         success: true,
         path: `/images/blog/${filename}.png`,
         mdxUsage: `![${prompt}](/images/blog/${filename}.png)`,
-        message: `Image generated and committed. Use this in your MDX: ![alt](/images/blog/${filename}.png)`,
+        message: `Image generated and committed. A preview was sent above. Use in MDX: ![alt](/images/blog/${filename}.png). If you don't like it, ask me to regenerate.`,
       };
     },
   }),
