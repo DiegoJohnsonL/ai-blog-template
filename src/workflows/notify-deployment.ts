@@ -11,23 +11,26 @@ export async function notifyDeployment(input: NotifyDeploymentInput) {
   "use workflow";
 
   // Give Vercel time to pick up the commit and start building
-  await sleep("20s");
+  await sleep("30s");
 
-  // Poll deployment status (up to 12 attempts = ~2 minutes)
-  for (let attempt = 0; attempt < 12; attempt++) {
+  // Poll deployment status (up to 18 attempts = ~3 minutes)
+  for (let attempt = 0; attempt < 18; attempt++) {
     const status = await checkDeploymentStatus();
 
-    if (status.state === "success") {
+    if (status.state === "success" || status.state === "ready") {
       const siteUrl = process.env.SITE_URL ?? status.environmentUrl;
       const blogUrl = `${siteUrl}/${input.locale}/blog/${input.slug}`;
-      await sendTelegramMessage(input.chatId, blogUrl);
+      await sendTelegramMessage(
+        input.chatId,
+        `Your blog post is live! Check it out:\n${blogUrl}`,
+      );
       return { success: true, url: blogUrl };
     }
 
     if (status.state === "failure" || status.state === "error") {
       await sendTelegramMessage(
         input.chatId,
-        `⚠️ Deployment failed: ${status.description ?? "unknown error"}`,
+        `Deployment failed: ${status.description ?? "unknown error"}. Check Vercel dashboard.`,
       );
       return { success: false, state: status.state };
     }
@@ -35,10 +38,12 @@ export async function notifyDeployment(input: NotifyDeploymentInput) {
     await sleep("10s");
   }
 
-  // Timed out
+  // Timed out — send the URL anyway since it likely deployed
+  const siteUrl = process.env.SITE_URL ?? "https://ai-blog-template.vercel.app";
+  const blogUrl = `${siteUrl}/${input.locale}/blog/${input.slug}`;
   await sendTelegramMessage(
     input.chatId,
-    "⏳ Deployment is taking longer than expected. Check Vercel dashboard.",
+    `Deployment status check timed out, but the post should be live:\n${blogUrl}`,
   );
   return { success: false, state: "timeout" };
 }
@@ -57,35 +62,52 @@ async function checkDeploymentStatus(): Promise<DeployStatus> {
 
   const owner = process.env.GITHUB_OWNER!;
   const repo = process.env.GITHUB_REPO!;
-  const branch = process.env.GITHUB_BRANCH ?? "main";
 
+  // Don't filter by ref — Vercel may register the deployment
+  // under the commit SHA rather than the branch name.
   const { data: deployments } = await octokit.repos.listDeployments({
     owner,
     repo,
-    ref: branch,
-    per_page: 1,
+    per_page: 5,
+    sort: "created_at",
+    direction: "desc",
   });
 
   if (deployments.length === 0) {
     return { state: "pending", environmentUrl: null, description: null };
   }
 
-  const { data: statuses } = await octokit.repos.listDeploymentStatuses({
-    owner,
-    repo,
-    deployment_id: deployments[0].id,
-    per_page: 1,
-  });
+  // Find the most recent deployment that's either in progress or just finished.
+  // Skip "inactive" deployments — those are old ones replaced by Vercel.
+  for (const deployment of deployments) {
+    const { data: statuses } = await octokit.repos.listDeploymentStatuses({
+      owner,
+      repo,
+      deployment_id: deployment.id,
+      per_page: 1,
+    });
 
-  if (statuses.length === 0) {
-    return { state: "pending", environmentUrl: null, description: null };
+    if (statuses.length === 0) {
+      // Deployment exists but no status yet — it's being set up
+      return { state: "pending", environmentUrl: null, description: null };
+    }
+
+    const latest = statuses[0];
+
+    // Skip inactive (replaced) deployments
+    if (latest.state === "inactive") {
+      continue;
+    }
+
+    return {
+      state: latest.state,
+      environmentUrl: latest.environment_url || null,
+      description: latest.description || null,
+    };
   }
 
-  return {
-    state: statuses[0].state,
-    environmentUrl: statuses[0].environment_url || null,
-    description: statuses[0].description || null,
-  };
+  // All deployments are inactive — new one hasn't appeared yet
+  return { state: "pending", environmentUrl: null, description: null };
 }
 
 async function sendTelegramMessage(chatId: string, text: string) {
@@ -104,7 +126,6 @@ async function sendTelegramMessage(chatId: string, text: string) {
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: "HTML",
       }),
     },
   );
