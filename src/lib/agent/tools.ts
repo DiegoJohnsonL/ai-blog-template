@@ -130,12 +130,11 @@ export const agentTools = {
         size,
       });
 
-      const buffer = Buffer.from(image.uint8Array);
-
       await createOrUpdateFile(
         filePath,
-        buffer.toString("base64"),
+        image.base64,
         `blog: add image ${filename}.png`,
+        true,
       );
 
       return {

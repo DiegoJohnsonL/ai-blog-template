@@ -39,6 +39,7 @@ export async function createOrUpdateFile(
   filePath: string,
   content: string,
   message: string,
+  isBase64 = false,
 ): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo, branch } = getRepoConfig();
@@ -63,7 +64,7 @@ export async function createOrUpdateFile(
     repo,
     path: filePath,
     message,
-    content: Buffer.from(content).toString("base64"),
+    content: isBase64 ? content : Buffer.from(content).toString("base64"),
     branch,
     ...(sha ? { sha } : {}),
   });
