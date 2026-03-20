@@ -47,6 +47,11 @@ export function getBot() {
     });
 
     _bot.onSubscribedMessage(async (thread, message) => {
+      if (message.text.trim().toLowerCase() === "/new") {
+        await thread.unsubscribe();
+        await thread.post("Conversation cleared. Send a new message to start fresh.");
+        return;
+      }
       await handleMessage(thread, message);
     });
   }
