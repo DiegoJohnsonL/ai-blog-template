@@ -1,11 +1,21 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { start } from "workflow/api";
 import { assertAllowedPath } from "./sandbox";
 import {
   createOrUpdateFile,
   getFileContent,
   listFiles,
 } from "@/lib/github";
+import { notifyDeployment } from "@/workflows/notify-deployment";
+
+// Set by the bot before invoking the agent, so the workflow
+// can send deployment notifications back to the right chat.
+let _currentChatId: string | null = null;
+
+export function setCurrentChatId(chatId: string) {
+  _currentChatId = chatId;
+}
 
 export const agentTools = {
   createBlogPost: tool({
@@ -46,7 +56,18 @@ export const agentTools = {
         `blog: add ${slug} (${locale})`,
       );
 
-      return { success: true, path: filePath, date };
+      // Fire-and-forget: workflow watches deployment and notifies the chat
+      if (_currentChatId) {
+        await start(notifyDeployment, [{ chatId: _currentChatId, locale, slug }]);
+      }
+
+      const siteUrl = process.env.SITE_URL ?? "https://your-site.vercel.app";
+      return {
+        success: true,
+        path: filePath,
+        date,
+        message: `Post committed. You'll get a notification when it's live at ${siteUrl}/${locale}/blog/${slug}`,
+      };
     },
   }),
 
