@@ -1,5 +1,4 @@
-import { tool, generateImage } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { tool, generateImage, gateway } from "ai";
 import { z } from "zod";
 import { start } from "workflow/api";
 import { assertAllowedPath } from "./sandbox";
@@ -117,16 +116,16 @@ export const agentTools = {
         .regex(/^[a-z0-9-]+$/)
         .describe("Filename without extension (lowercase, hyphens only)"),
       size: z
-        .enum(["1024x1024", "1792x1024", "1024x1792"])
-        .default("1792x1024")
-        .describe("Image dimensions"),
+        .enum(["1024x1024", "1360x768", "768x1360", "1152x864", "864x1152"])
+        .default("1360x768")
+        .describe("Image size (landscape 1360x768, portrait 768x1360, square 1024x1024, 4:3 1152x864)"),
     }),
     execute: async ({ prompt, filename, size }) => {
       const filePath = `public/images/blog/${filename}.png`;
       assertAllowedPath(filePath);
 
       const { image } = await generateImage({
-        model: openai.image("dall-e-3"),
+        model: gateway.image("bfl/flux-2-pro"),
         prompt,
         size,
       });
