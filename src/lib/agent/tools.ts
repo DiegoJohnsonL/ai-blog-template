@@ -1,4 +1,5 @@
-import { tool } from "ai";
+import { tool, generateImage } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { start } from "workflow/api";
 import { assertAllowedPath } from "./sandbox";
@@ -18,9 +19,43 @@ export function setCurrentChatId(chatId: string) {
 }
 
 export const agentTools = {
+  draftBlogPost: tool({
+    description:
+      "Show the user a draft of a blog post before publishing. Use this FIRST when asked to write a blog post, so the user can review and approve before committing. Returns the full content as text for the user to read in chat.",
+    inputSchema: z.object({
+      locale: z
+        .enum(["en", "es"])
+        .describe("The locale/language for the blog post"),
+      slug: z
+        .string()
+        .regex(/^[a-z0-9-]+$/)
+        .describe("URL-friendly slug (lowercase, hyphens only)"),
+      title: z.string().describe("The blog post title"),
+      description: z.string().describe("A short summary of the post"),
+      tags: z.array(z.string()).describe("Tags for the post"),
+      content: z.string().describe("The MDX body content (no frontmatter)"),
+    }),
+    execute: async ({ locale, slug, title, description, tags, content }) => {
+      const date = new Date().toISOString().split("T")[0];
+
+      return {
+        draft: true,
+        locale,
+        slug,
+        title,
+        description,
+        date,
+        tags,
+        content,
+        message:
+          "Here is your draft. Reply with 'publish' to commit it, or tell me what to change.",
+      };
+    },
+  }),
+
   createBlogPost: tool({
     description:
-      "Create a new blog post as an MDX file. The content should be valid MDX with frontmatter (title, description, date, tags).",
+      "Publish a blog post by committing an MDX file to the repository. Only use this AFTER the user has approved a draft via draftBlogPost.",
     inputSchema: z.object({
       locale: z
         .enum(["en", "es"])
@@ -56,9 +91,10 @@ export const agentTools = {
         `blog: add ${slug} (${locale})`,
       );
 
-      // Fire-and-forget: workflow watches deployment and notifies the chat
       if (_currentChatId) {
-        await start(notifyDeployment, [{ chatId: _currentChatId, locale, slug }]);
+        await start(notifyDeployment, [
+          { chatId: _currentChatId, locale, slug },
+        ]);
       }
 
       const siteUrl = process.env.SITE_URL ?? "https://your-site.vercel.app";
@@ -66,7 +102,48 @@ export const agentTools = {
         success: true,
         path: filePath,
         date,
-        message: `Post committed. You'll get a notification when it's live at ${siteUrl}/${locale}/blog/${slug}`,
+        message: `Post committed. I'll notify you when it's live at ${siteUrl}/${locale}/blog/${slug}`,
+      };
+    },
+  }),
+
+  generateBlogImage: tool({
+    description:
+      "Generate an image for a blog post using AI and commit it to the repository. Returns the image path that can be used in MDX content as ![alt](/images/blog/filename.png).",
+    inputSchema: z.object({
+      prompt: z.string().describe("Detailed description of the image to generate"),
+      filename: z
+        .string()
+        .regex(/^[a-z0-9-]+$/)
+        .describe("Filename without extension (lowercase, hyphens only)"),
+      size: z
+        .enum(["1024x1024", "1792x1024", "1024x1792"])
+        .default("1792x1024")
+        .describe("Image dimensions"),
+    }),
+    execute: async ({ prompt, filename, size }) => {
+      const filePath = `public/images/blog/${filename}.png`;
+      assertAllowedPath(filePath);
+
+      const { image } = await generateImage({
+        model: openai.image("dall-e-3"),
+        prompt,
+        size,
+      });
+
+      const buffer = Buffer.from(image.uint8Array);
+
+      await createOrUpdateFile(
+        filePath,
+        buffer.toString("base64"),
+        `blog: add image ${filename}.png`,
+      );
+
+      return {
+        success: true,
+        path: `/images/blog/${filename}.png`,
+        mdxUsage: `![${prompt}](/images/blog/${filename}.png)`,
+        message: `Image generated and committed. Use this in your MDX: ![alt](/images/blog/${filename}.png)`,
       };
     },
   }),
