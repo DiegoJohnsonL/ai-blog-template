@@ -91,7 +91,7 @@ async function handleMessage(
   const allMessages = [...previousMessages, userMessage];
 
   const result = streamText({
-    model: gateway("anthropic/claude-sonnet-4.5"),
+    model: gateway("openai/gpt-5-mini"),
     system: SYSTEM_PROMPT,
     messages: allMessages,
     tools: agentTools,

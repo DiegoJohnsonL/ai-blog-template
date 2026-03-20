@@ -20,7 +20,7 @@ When updating translations:
 Always confirm what you did after completing an action.`;
 
 const agent = new ToolLoopAgent({
-  model: gateway("anthropic/claude-sonnet-4.5"),
+  model: gateway("openai/gpt-5-mini"),
   instructions: SYSTEM_PROMPT,
   tools: agentTools,
   stopWhen: stepCountIs(10),
