@@ -1,0 +1,18 @@
+{
+  "home": {
+    "title": "AI Blog Template",
+    "description": "Un blog impulsado por un agente de contenido IA. Escribe posts y gestiona traducciones a trav\u00e9s de Telegram."
+  },
+  "blog": {
+    "title": "Blog",
+    "readMore": "Leer m\u00e1s",
+    "backToBlog": "Volver al blog",
+    "publishedOn": "Publicado el {date}",
+    "noPostsYet": "\u00a1A\u00fan no hay posts. Dile al agente que escriba uno!",
+    "tags": "Etiquetas"
+  },
+  "nav": {
+    "home": "Inicio",
+    "blog": "Blog"
+  }
+}

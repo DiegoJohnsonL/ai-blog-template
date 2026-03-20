@@ -1,0 +1,18 @@
+{
+  "home": {
+    "title": "AI Blog Template",
+    "description": "A blog powered by an AI content agent. Write posts and manage translations through Telegram."
+  },
+  "blog": {
+    "title": "Blog",
+    "readMore": "Read more",
+    "backToBlog": "Back to blog",
+    "publishedOn": "Published on {date}",
+    "noPostsYet": "No posts yet. Tell the agent to write one!",
+    "tags": "Tags"
+  },
+  "nav": {
+    "home": "Home",
+    "blog": "Blog"
+  }
+}
