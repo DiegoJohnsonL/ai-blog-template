@@ -4,15 +4,16 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
+import { Link } from "@/i18n/navigation";
 import "../globals.css";
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
@@ -38,10 +39,45 @@ export default async function LocaleLayout({ children, params }: Props) {
       lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-zinc-50 dark:bg-zinc-950">
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+      <body className="min-h-full flex flex-col">
+        <NextIntlClientProvider>
+          <header className="border-b border-border">
+            <nav className="mx-auto flex max-w-2xl items-center justify-between px-6 py-4">
+              <Link href="/" className="text-sm font-semibold">
+                AI Blog
+              </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/blog"
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Blog
+                </Link>
+                <LocaleSwitcher locale={locale} />
+              </div>
+            </nav>
+          </header>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
+  );
+}
+
+function LocaleSwitcher({ locale }: { locale: string }) {
+  return (
+    <div className="flex gap-2 text-xs">
+      {routing.locales.map((l) => (
+        <Link
+          key={l}
+          href="/"
+          locale={l}
+          className={`uppercase ${l === locale ? "font-bold text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          {l}
+        </Link>
+      ))}
+    </div>
   );
 }
 
